@@ -23,6 +23,7 @@ import tensorflow as tf
 
 class FeedFowardNetwork(tf.layers.Layer):
   """Fully connected feedforward network."""
+  """全连接前向神经网络."""
 
   def __init__(self, hidden_size, filter_size, relu_dropout, train, allow_pad):
     super(FeedFowardNetwork, self).__init__()
@@ -42,18 +43,23 @@ class FeedFowardNetwork(tf.layers.Layer):
 
     Args:
       x: tensor with shape [batch_size, length, hidden_size]
+      x: 一个形状为[batch_size, length, hidden_size]的tensor
       padding: (optional) If set, the padding values are temporarily removed
         from x (provided self.allow_pad is set). The padding values are placed
         back in the output tensor in the same locations.
         shape [batch_size, length]
+      padding：如果输入padding，这些padding的位置上的值会被保护起来。
+        等网络输出之后再把这些值设置回去。
 
     Returns:
       Output of the feedforward network.
       tensor with shape [batch_size, length, hidden_size]
+      模型的输出，一个形状为[batch_size, length, hidden_size]的tensor。
     """
     padding = None if not self.allow_pad else padding
 
     # Retrieve dynamically known shapes
+    # 拿到输出的tensor形状
     batch_size = tf.shape(x)[0]
     length = tf.shape(x)[1]
 

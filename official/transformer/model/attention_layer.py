@@ -23,11 +23,13 @@ import tensorflow as tf
 
 class Attention(tf.layers.Layer):
   """Multi-headed attention layer."""
+  """多head attention层"""
 
   def __init__(self, hidden_size, num_heads, attention_dropout, train):
     if hidden_size % num_heads != 0:
       raise ValueError("Hidden size must be evenly divisible by the number of "
                        "heads.")
+      # hidden size必须是head个数的整数倍。
 
     super(Attention, self).__init__()
     self.hidden_size = hidden_size

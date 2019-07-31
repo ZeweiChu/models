@@ -78,6 +78,7 @@ def model_fn(features, labels, mode, params):
 
     # When in prediction mode, the labels/targets is None. The model output
     # is the prediction
+    # 在predict mode之下，
     if mode == tf.estimator.ModeKeys.PREDICT:
       if params["use_tpu"]:
         raise NotImplementedError("Prediction is not yet supported on TPUs.")
