@@ -47,15 +47,19 @@ class Attention(tf.layers.Layer):
 
   def split_heads(self, x):
     """Split x into different heads, and transpose the resulting value.
+    把x拆分成若干个heads，然后翻转得到的value。
 
     The tensor is transposed to insure the inner dimensions hold the correct
     values during the matrix multiplication.
+    tensor会被翻转以确保它的维度符合矩阵乘法的要求。
 
     Args:
       x: A tensor with shape [batch_size, length, hidden_size]
+      x: 一个[batch_size, length, hidden_size]形状的tensor
 
     Returns:
       A tensor with shape [batch_size, num_heads, length, hidden_size/num_heads]
+      一个[batch_size, num_heads, length, hidden_size/num_heads]形状的tensor
     """
     with tf.name_scope("split_heads"):
       batch_size = tf.shape(x)[0]
@@ -68,6 +72,7 @@ class Attention(tf.layers.Layer):
       x = tf.reshape(x, [batch_size, length, self.num_heads, depth])
 
       # Transpose the result
+      # 转置，返回矩阵的形状是[batch_size, self.num_heads, length, depth])
       return tf.transpose(x, [0, 2, 1, 3])
 
   def combine_heads(self, x):
@@ -75,9 +80,11 @@ class Attention(tf.layers.Layer):
 
     Args:
       x: A tensor [batch_size, num_heads, length, hidden_size/num_heads]
+      x: 一个[batch_size, num_heads, length, hidden_size/num_heads]形状的tensor
 
     Returns:
       A tensor with shape [batch_size, length, hidden_size]
+      一个[batch_size, length, hidden_size]形状的tensor
     """
     with tf.name_scope("combine_heads"):
       batch_size = tf.shape(x)[0]
@@ -90,13 +97,17 @@ class Attention(tf.layers.Layer):
 
     Args:
       x: a tensor with shape [batch_size, length_x, hidden_size]
+      x: 一个形状为[batch_size, length_x, hidden_size]的tensor
       y: a tensor with shape [batch_size, length_y, hidden_size]
+      y: 一个形状为[batch_size, length_y, hidden_size]的tensor
       bias: attention bias that will be added to the result of the dot product.
+      bias: attention bias, 会被加到dot product的结果上
       cache: (Used during prediction) dictionary with tensors containing results
         of previous attentions. The dictionary must have the items:
             {"k": tensor with shape [batch_size, i, key_channels],
              "v": tensor with shape [batch_size, i, value_channels]}
         where i is the current decoded length.
+      cache: (预测的时候用)
 
     Returns:
       Attention layer output with shape [batch_size, length_x, hidden_size]
@@ -105,6 +116,7 @@ class Attention(tf.layers.Layer):
     # learned projections. This is in preparation of splitting them into
     # multiple heads. Multi-head attention uses multiple queries, keys, and
     # values rather than regular attention (which uses a single q, k, v).
+    # 用线性变换，把x转化成query，把y转化成key和value。
     q = self.q_dense_layer(x)
     k = self.k_dense_layer(y)
     v = self.v_dense_layer(y)
@@ -119,26 +131,32 @@ class Attention(tf.layers.Layer):
       cache["v"] = v
 
     # Split q, k, v into heads.
+    # 把q, k, v分成若干个heads
     q = self.split_heads(q)
     k = self.split_heads(k)
     v = self.split_heads(v)
 
     # Scale q to prevent the dot product between q and k from growing too large.
+    # rescale一下q方正q和k的点积得到的结果太大。
     depth = (self.hidden_size // self.num_heads)
-    q *= depth ** -0.5
+    q *= depth ** -0.5 # [batch_size, num_heads, length_x, hidden_size//num_heads]
 
     # Calculate dot product attention
-    logits = tf.matmul(q, k, transpose_b=True)
+    logits = tf.matmul(q, k, transpose_b=True) 
+    # [batch_size, num_heads, length_x, length_x]
     logits += bias
     weights = tf.nn.softmax(logits, name="attention_weights")
+    # 归一化
     if self.train:
       weights = tf.nn.dropout(weights, 1.0 - self.attention_dropout)
     attention_output = tf.matmul(weights, v)
+    # [batch_size, num_heads, length_x, hidden_size//num_heads]
 
     # Recombine heads --> [batch_size, length, hidden_size]
     attention_output = self.combine_heads(attention_output)
 
     # Run the combined outputs through another linear projection layer.
+    # 再经过一层线性变换。
     attention_output = self.output_dense_layer(attention_output)
     return attention_output
 

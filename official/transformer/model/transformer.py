@@ -36,9 +36,13 @@ _NEG_INF = -1e9
 
 class Transformer(object):
   """Transformer model for sequence to sequence data.
+  Transformer模型
 
   Implemented as described in: https://arxiv.org/pdf/1706.03762.pdf
 
+  Transformer模型包括一个encoder和一个decoder。输入是一串int序列，或者是一个batch的序列。
+  encoder把序列转换成一些连续的向量表示，decoder使用encoder生成的向量表示来生成输出序列的
+  概率分布。
   The Transformer model consists of an encoder and decoder. The input is an int
   sequence (or a batch of sequences). The encoder produces a continous
   representation, and the decoder uses the encoder output to generate
@@ -100,19 +104,25 @@ class Transformer(object):
 
   def encode(self, inputs, attention_bias):
     """Generate continuous representation for inputs.
+    把输入转变成连续向量表示。
 
     Args:
       inputs: int tensor with shape [batch_size, input_length].
+      inputs: 形状为[batch_size, input_length]的输入tensor 
       attention_bias: float tensor with shape [batch_size, 1, 1, input_length]
+      attention_bias: 形状为[batch_size, 1, 1, input_length]的float tensor
 
     Returns:
       float tensor with shape [batch_size, input_length, hidden_size]
+      形状为[batch_size, input_length, hidden_size]的float tensor
     """
     with tf.name_scope("encode"):
       # Prepare inputs to the layer stack by adding positional encodings and
       # applying dropout.
       embedded_inputs = self.embedding_softmax_layer(inputs)
+      # [batch_size, input_length, hidden_size]
       inputs_padding = model_utils.get_padding(inputs)
+      # 得到padding的mask: [batch_size, input_length]
 
       with tf.name_scope("add_pos_encoding"):
         length = tf.shape(embedded_inputs)[1]
@@ -128,26 +138,35 @@ class Transformer(object):
 
   def decode(self, targets, encoder_outputs, attention_bias):
     """Generate logits for each value in the target sequence.
+    对每个target序列中的词生成logits
 
     Args:
       targets: target values for the output sequence.
         int tensor with shape [batch_size, target_length]
+      targets: 目标序列[batch_size, target_length]
       encoder_outputs: continuous representation of input sequence.
         float tensor with shape [batch_size, input_length, hidden_size]
+      encoder_outputs: 来自encoder的输入序列的连续表示
+      [batch_size, input_length, hidden_size]
       attention_bias: float tensor with shape [batch_size, 1, 1, input_length]
+      attention_bias: 形状为[batch_size, 1, 1, input_length]
 
     Returns:
       float32 tensor with shape [batch_size, target_length, vocab_size]
+      float32 tensor 形状为 [batch_size, target_length, vocab_size]
     """
     with tf.name_scope("decode"):
       # Prepare inputs to decoder layers by shifting targets, adding positional
       # encoding and applying dropout.
       decoder_inputs = self.embedding_softmax_layer(targets)
+      # [batch_size, target_length, hidden_size]
       with tf.name_scope("shift_targets"):
         # Shift targets to the right, and remove the last element
         decoder_inputs = tf.pad(
             decoder_inputs, [[0, 0], [1, 0], [0, 0]])[:, :-1, :]
+        # 把targets在sequence length维度上向右移动一个位置，并且去掉最后一个位置
       with tf.name_scope("add_pos_encoding"):
+        # 添加positional encoding
         length = tf.shape(decoder_inputs)[1]
         decoder_inputs += model_utils.get_position_encoding(
             length, self.params["hidden_size"])
@@ -266,6 +285,7 @@ class LayerNormalization(tf.layers.Layer):
 
 class PrePostProcessingWrapper(object):
   """Wrapper class that applies layer pre-processing and post-processing."""
+  """这个一个wrapper class，在某一网络层前面加上LayerNorm，后面加上dropout和residual连接"""
 
   def __init__(self, layer, params, train):
     self.layer = layer
@@ -277,12 +297,14 @@ class PrePostProcessingWrapper(object):
 
   def __call__(self, x, *args, **kwargs):
     # Preprocessing: apply layer normalization
+    # 在传入该层之前加入layer norm
     y = self.layer_norm(x)
 
     # Get layer output
     y = self.layer(y, *args, **kwargs)
 
     # Postprocessing: apply dropout and residual connection
+    # 在实现该层之后加上dropout和residual connection
     if self.train:
       y = tf.nn.dropout(y, 1 - self.postprocess_dropout)
     return x + y
@@ -290,11 +312,15 @@ class PrePostProcessingWrapper(object):
 
 class EncoderStack(tf.layers.Layer):
   """Transformer encoder stack.
+  Transofrmer编码器stack
 
   The encoder stack is made up of N identical layers. Each layer is composed
   of the sublayers:
+  编码stack由N个相同的层叠加而成。每一层都包含以下一个子层：
     1. Self-attention layer
+    1. 自注意力层
     2. Feedforward network (which is 2 fully-connected layers)
+    2. 前向网络（两个全连接层）
   """
 
   def __init__(self, params, train):
@@ -305,9 +331,11 @@ class EncoderStack(tf.layers.Layer):
       self_attention_layer = attention_layer.SelfAttention(
           params["hidden_size"], params["num_heads"],
           params["attention_dropout"], train)
+      # 自注意力层
       feed_forward_network = ffn_layer.FeedFowardNetwork(
           params["hidden_size"], params["filter_size"],
           params["relu_dropout"], train, params["allow_ffn_pad"])
+      # 前向网络
 
       self.layers.append([
           PrePostProcessingWrapper(self_attention_layer, params, train),
@@ -345,13 +373,18 @@ class EncoderStack(tf.layers.Layer):
 
 class DecoderStack(tf.layers.Layer):
   """Transformer decoder stack.
+  一层一层叠起来的transformer decoder
 
   Like the encoder stack, the decoder stack is made up of N identical layers.
   Each layer is composed of the sublayers:
+  decoder是由N个相同的层次叠加起来的，每一层包含以下几个部分：
     1. Self-attention layer
+    1. 自注意力层
     2. Multi-headed attention layer combining encoder outputs with results from
        the previous self-attention layer.
+    2. 多head注意力层，包括前一层的输出。
     3. Feedforward network (2 fully-connected layers)
+    3. 前向全连接层
   """
 
   def __init__(self, params, train):

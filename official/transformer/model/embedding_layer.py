@@ -108,6 +108,9 @@ class EmbeddingSharedWeights(tf.layers.Layer):
       length = tf.shape(x)[1]
 
       x = tf.reshape(x, [-1, self.hidden_size])
+      # [batch_size*length, hidden_size]
       logits = tf.matmul(x, self.shared_weights, transpose_b=True)
+      # [batch_size*length, vocab_size]
 
       return tf.reshape(logits, [batch_size, length, self.vocab_size])
+      # [batch_size, length, vocab_size]
