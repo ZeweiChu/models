@@ -35,24 +35,38 @@ class _StateKeys(object):
   # that have not generated an EOS token. Sequences that reach EOS are marked as
   # finished and moved to the FINISHED_SEQ tensor.
   # Has shape [batch_size, beam_size, CUR_INDEX + 1]
+  # ALIVE_SEQ的是那些还没有生成EOS token的sequence。至于那些已经生成EOS的sequence，会被
+  # 标记为finished然后移交到FINISHED_SEQ tensor.
+  # 形状为[batch_size, beam_size, CUR_INDEX + 1]
   ALIVE_SEQ = "ALIVE_SEQ"
   # Log probabilities of each alive sequence. Shape [batch_size, beam_size]
+  # alive seuuence的log概率
+  # 形状为[batch_size, beam_size]
   ALIVE_LOG_PROBS = "ALIVE_LOG_PROBS"
   # Dictionary of cached values for each alive sequence. The cache stores
   # the encoder output, attention bias, and the decoder attention output from
   # the previous iteration.
+  # alive sequence的一些相关值。包括encoder output, attention bias, 和
+  # 之前decoder attention的输出。
   ALIVE_CACHE = "ALIVE_CACHE"
 
   # Top finished sequences for each batch item.
   # Has shape [batch_size, beam_size, CUR_INDEX + 1]. Sequences that are
   # shorter than CUR_INDEX + 1 are padded with 0s.
+  # batch中已经完成的sequence
+  # 形状为[batch_size, beam_size, CUR_INDEX + 1]
+  # 短于CUR_INDEX + 1的句子会被pad上0
   FINISHED_SEQ = "FINISHED_SEQ"
   # Scores for each finished sequence. Score = log probability / length norm
   # Shape [batch_size, beam_size]
+  # 已完成句子的分数，分数是log probability / length norm
+  # 形状[batch_size, beam_size]
   FINISHED_SCORES = "FINISHED_SCORES"
   # Flags indicating which sequences in the finished sequences are finished.
   # At the beginning, all of the sequences in FINISHED_SEQ are filler values.
   # True -> finished sequence, False -> filler. Shape [batch_size, beam_size]
+  # 表示那些句子已经完成了
+  # True -> 已完成的sequence, False -> 待填充. 形状[batch_size, beam_size]
   FINISHED_FLAGS = "FINISHED_FLAGS"
 
 
@@ -95,12 +109,15 @@ class SequenceBeamSearch(object):
 
   def _create_initial_state(self, initial_ids, initial_cache):
     """Return initial state dictionary and its shape invariants.
+    创建初始的state dictionary
 
     Args:
       initial_ids: initial ids to pass into the symbols_to_logits_fn.
         int tensor with shape [batch_size, 1]
+        传到symbols_to_logits_fn的初始id，形状为[batch_size, 1]
       initial_cache: dictionary storing values to be passed into the
         symbols_to_logits_fn.
+        传到symbols_to_logits_fn的一个dictionary
 
     Returns:
         state and shape invariant dictionaries with keys from _StateKeys
@@ -114,16 +131,20 @@ class SequenceBeamSearch(object):
 
     # Create tensor for storing initial log probabilities.
     # Assume initial_ids are prob 1.0
+    # 创建一个储存初始log概率的tensor
+    # 假设所有id的初始概率都为1.0
     initial_log_probs = tf.constant(
         [[0.] + [-float("inf")] * (self.beam_size - 1)])
     alive_log_probs = tf.tile(initial_log_probs, [self.batch_size, 1])
 
     # Expand all values stored in the dictionary to the beam size, so that each
     # beam has a separate cache.
+    # 所有dictionary当中的值都要扩展到beam大小
     alive_cache = nest.map_structure(
         lambda t: _expand_to_beam_size(t, self.beam_size), initial_cache)
 
     # Initialize tensor storing finished sequences with filler values.
+    # 
     finished_seq = tf.zeros(tf.shape(alive_seq), tf.int32)
 
     # Set scores of the initial finished seqs to negative infinity.
@@ -163,12 +184,16 @@ class SequenceBeamSearch(object):
 
   def _continue_search(self, state):
     """Return whether to continue the search loop.
+    返回是否需要继续search循环
 
     The loops should terminate when
+    在以下情况下loop需要终止
       1) when decode length has been reached, or
+      1) 达到deocde的最大长度
       2) when the worst score in the finished sequences is better than the best
          score in the alive sequences (i.e. the finished sequences are provably
          unchanging)
+      2) 当已完成的sequence中的最差的分数也比alive sequence中最好的分数还高的时候
 
     Args:
       state: A dictionary with the current loop state.
@@ -211,14 +236,18 @@ class SequenceBeamSearch(object):
 
   def _search_step(self, state):
     """Beam search loop body.
+    Beam search循环
 
     Grow alive sequences by a single ID. Sequences that have reached the EOS
     token are marked as finished. The alive and finished sequences with the
     highest log probabilities and scores are returned.
+    增长alive sequences。达到EOS的sequences会被标记为finished。
 
     A sequence's finished score is calculating by dividing the log probability
     by the length normalization factor. Without length normalization, the
     search is more likely to return shorter sequences.
+    一个已经finished的sequence的分数是它的log probability除以length normalization 
+    factor。如果没有length normalization，beam search很容易返回短的sequences。
 
     Args:
       state: A dictionary with the current loop state.
@@ -227,6 +256,7 @@ class SequenceBeamSearch(object):
       new state dictionary.
     """
     # Grow alive sequences by one token.
+    # 增长一个token
     new_seq, new_log_probs, new_cache = self._grow_alive_seq(state)
     # Collect top beam_size alive sequences
     alive_state = self._get_new_alive_state(new_seq, new_log_probs, new_cache)
@@ -247,6 +277,8 @@ class SequenceBeamSearch(object):
     2*beam_size sequences are collected because some sequences may have reached
     the EOS token. 2*beam_size ensures that at least beam_size sequences are
     still alive.
+    收集2*beam_size个sequences，因为有些sequence可能已经到EOS token了。2*beam_size个
+    sequences可以确保至少有beam_size个sequence还是alive的。   
 
     Args:
       state: A dictionary with the current loop state.
@@ -277,6 +309,7 @@ class SequenceBeamSearch(object):
         flat_cache)
 
     # Convert logits to normalized log probs
+    # 把logits转化为normalized log probs
     candidate_log_probs = _log_prob_from_logits(logits)
 
     # Calculate new log probabilities if each of the alive sequences were
@@ -305,12 +338,15 @@ class SequenceBeamSearch(object):
 
   def _get_new_alive_state(self, new_seq, new_log_probs, new_cache):
     """Gather the top k sequences that are still alive.
+    拿到前k个alive的sequences
 
     Args:
       new_seq: New sequences generated by growing the current alive sequences
         int32 tensor with shape [batch_size, 2 * beam_size, cur_index + 1]
+        在当前alive的sequences的基础上增加新的
       new_log_probs: Log probabilities of new sequences
         float32 tensor with shape [batch_size, beam_size]
+        新的sequences的log probabilities
       new_cache: Dict of cached values for each sequence.
 
     Returns:
@@ -389,6 +425,7 @@ def sequence_beam_search(
     symbols_to_logits_fn, initial_ids, initial_cache, vocab_size, beam_size,
     alpha, max_decode_length, eos_id):
   """Search for sequence of subtoken ids with the largest probability.
+  sequence的beam search
 
   Args:
     symbols_to_logits_fn: A function that takes in ids, index, and cache as

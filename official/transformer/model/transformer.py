@@ -68,10 +68,13 @@ class Transformer(object):
 
   def __call__(self, inputs, targets=None):
     """Calculate target logits or inferred target sequences.
+      计算目标的logits或者推断目标sequence。
 
     Args:
       inputs: int tensor with shape [batch_size, input_length].
+      输入tensor，形状为[batch_size, input_length]
       targets: None or int tensor with shape [batch_size, target_length].
+      目标tensor，形状为[batch_size, target_length]
 
     Returns:
       If targets is defined, then return logits for each word in the target
@@ -80,6 +83,12 @@ class Transformer(object):
         returns a dictionary {
           output: [batch_size, decoded length]
           score: [batch_size, float]}
+      如果目标tensor给定，那么返回目标sequence当中每个单词的logits，也就是形状为
+      [batch_size, target_length, vocab_size]的float tensor，用于训练。
+      如果target是none，直接一个单词一个单词生成输出sequence。返回一个dictionary，
+      包含 {
+        output: [batch_size, decoded length]
+        score: [batch_size, float]}
     """
     # Variance scaling is used here because it seems to work in many problems.
     # Other reasonable initializers may also work just as well.
@@ -88,14 +97,18 @@ class Transformer(object):
     with tf.variable_scope("Transformer", initializer=initializer):
       # Calculate attention bias for encoder self-attention and decoder
       # multi-headed attention layers.
+      # 计算attention bias
       attention_bias = model_utils.get_padding_bias(inputs)
 
       # Run the inputs through the encoder layer to map the symbol
       # representations to continuous representations.
+      # 用encoder把输入tensor变成连续的向量表示。
       encoder_outputs = self.encode(inputs, attention_bias)
 
       # Generate output sequence if targets is None, or return logits if target
       # sequence is known.
+      # 如果target是None，生成output sequence
+      # 如果target sequence给定，生成每个单词的logits
       if targets is None:
         return self.predict(encoder_outputs, attention_bias)
       else:

@@ -61,6 +61,8 @@ BLEU_DIR = "bleu"
 
 # Dictionary containing tensors that are logged by the logging hooks. Each item
 # maps a string to the tensor name.
+# 一个dictionary，用来记录哪些tensor需要被存储进log中。
+# string到tensor的名称的mapping。
 TENSORS_TO_LOG = {
     "learning_rate": "model/get_train_op/learning_rate/learning_rate",
     "cross_entropy_loss": "model/cross_entropy"}
@@ -68,10 +70,12 @@ TENSORS_TO_LOG = {
 
 def model_fn(features, labels, mode, params):
   """Defines how to train, evaluate and predict from the transformer model."""
+  """定义怎么样训练，评估和预测模型"""
   with tf.variable_scope("model"):
     inputs, targets = features, labels
 
     # Create model and get output logits.
+    # 定义模型，得到输出logits
     model = transformer.Transformer(params, mode == tf.estimator.ModeKeys.TRAIN)
 
     logits = model(inputs, targets)
